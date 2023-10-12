@@ -1,0 +1,673 @@
+---
+title: "Machine Learning Modelling"
+author: "Author"
+output:
+  bookdown::pdf_document2:
+    toc: yes
+    toc_depth: '6'
+  bookdown::html_document2:
+    toc: yes
+    toc_depth: '6'
+  bookdown::word_document2:
+    toc: yes
+    toc_depth: '6'
+    fig_caption: yes
+subtitle: Early Incident Identification
+fontsize: 12pt
+mainfont: Times New Roman
+---
+
+```{r, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning=FALSE, message=FALSE, fig.align='center',
+                      dpi=650, fig.width=10, fig.height=6)
+```
+
+\newpage
+
+# Introduction
+
+Computer systems and networks are often under attack from intruders, of whom masquerade under different duress to avoid detection. Their modes of operation vary over time, with advancement in technology within general and individual systems and networks, making it more harder for early detection of their intrusion. There may not be complete assurances that vulnerabilities within systems can be detected early or fixed up on time, given that detection and risk assessment is a continuous process. Moreover, patching up vulnerabilities within computer systems and networks does not imply that all is fixed as modes of operation change based on a number of factors.
+
+According to Lipson (2002, p. 7), communication across the computer systems that are acting as hosts, connected via wired or wireless links, is through the standardized regulations and rules known as Transmission Control Protocol/Internet Protocol, TCP/IP, with IP packet contents being data. 
+
+## Context and Motivation
+
+Attacks and intrusion often times may lead to unauthorized access, that may extend unnoticed over time, infection, modification and even the shut-down of the systems and networks. Changes in the systems often times go un-noticed until complaints are raised up on the efficiency of the systems and networks as argued by Lai & Hsia (2007). Successful transmission of the IP packets to the destination and without any interception, within a specified time is highly desired. However, as more systems join up to use a network, the complete security of systems becomes complex, with risk evaluation on the systems encompassing, but not limited to how to certify intrusions' risky levels, the vulnerability and type of vulnerability, the host systems facilitating the intrusion and its state, the level of security being offered to users of the systems and the level of patching of vulnerabilities and their effectiveness.
+
+## Problem Statement
+
+In a realistic setting, not all solutions to intrusions and vulnerabilities are easy to detect or solve and on time. The flow of information packets on the systems can provide information on intrusion, given that certain events may be deviating from the overall norm. Guiding our analysis is the Disc Consulting (DCE) data on IP Packet event records, that has identified malicious and non-malicious event record within their networks and computer systems, for which the attacks are more sophisticated than previously experienced attacks, with no clue on the methods used for intrusion. 
+
+A suggested approach is incorporate a real-time threat detection system based on machine learning classification models to categorize an record event as either malicious or not based on IP packets attributes. Performance measures and model selection, will be assessed inline with the scope of the DCE objectives. 
+
+# Literature Review
+
+Lipson (2002, p. 7) outlines the transmission of information from addresses of the source to destination via the IP packets, going through network ports that are designed to specifically handle the information based on the type of information being delivered. Routers facilitate the flow of IP packets through the network, through the best path, in a process known as a hop, with a given number of routers required to handle and move the IP packets closer to the destination. The flow of IP packets via routers terminates if the IP packets reach the source to destination or up until they are forwarded through the pre-specified number of routers as contained in the routing table of the router. The transmission protocol on the other hand ensures the IP packets, in the right order reach their destination, failure to which the re-transmission has to take place. IP addresses on the other hand are unique to each host on the network, facilitating the flow of IP packets from one host to another.
+
+In terms of individual level security Lipson (2002) states that as the number of individual users of computer systems rise, and with no expertise in ensuring their host computers are secured, the level of security offered has fairly been on a decline, as any one without expertise can operate a computer's basic functions, without time to time re-evaluation of the users host security level. Furthermore, they argue that as more demand for high speed internet bandwidth come up with advancement in the internet network, the flow of IP packets is not ingrained in the devices for long, as such critical information that might need re-evaluation gets lost within a short time.
+
+The ability to track down sources of intrusion via IP addresses keep on evolving, with organisations keeping logs on the flow of information in the event that they are required by law enforcement agencies. However, (Hofstede et al., 2017) argue that intruders may opt to delay intrusions intentionally or intrude from different computer systems to avoid being detected. Our analysis is guided by the need to evaluate IP packet data, as such the argument supports the need for real-time threat detection on the available data.
+
+# Methodology
+
+The data used in this analysis is a network and systems event record data of the Disc
+Consulting Enterprises (DCE). Each of the data observation is of an individual network
+packet, recorded by the SIEM logs, after triggering of an event during TCP communications
+between sources and hosts. The observations are further categorized as malicious or non-malicious, with presence of imbalance biased towards the malicious events, among the
+categorizing variable. The training of the models on train data takes into consideration the imbalance, as such the influence it has on the model accuracy is assessed. For solving the nature of response variable, balancing of the data is undertaken through up-sampling of the minority class via bootstrapping to have 2 train data sets and one test data that brings out a better representation across for the biased malicious event relative to the non-malicious event. The balanced train data sets are trained extensively using the random forest and logistic elastic net classification models whose parameters are hyper tuned. Cross validation is explored to obtain an optimal model for better learning and predictions (F.Y et al., 2017).
+
+## Dataset Description
+
+```{r}
+library(tidyverse)
+```
+
+
+```{r}
+MLS_Data_2023 <- read_csv(
+  file = "MLSData2023.csv", 
+  na = c("NA", -1, '-', 99999))
+# exclude IPV6 traffic given that it contains significant 
+# proportion of invalid values
+MLS_Data_2023$`IPV6 Traffic` <- NULL
+```
+
+The data comprises of `r dim(MLS_Data_2023)[1]` events with `r dim(MLS_Data_2023)[2]-1` predictor variables as in Table \@ref(tab:varDescription), and dependent `Class` indicating whether an event trigger is malicious or non-malicious. The independent variables are `r paste0(colnames(MLS_Data_2023)[-13], collapse = ', ')`.
+
+## Data Cleaning Steps
+
+T`IPV6 traffic (binary)` was excluded on import as it contains significant proportion of invalid values. The data was cleaned by filtering out to remain with observations whose Class label is either 0 or 1. Categories were merged in certain variables as they represent almost similar umbrella labels, with their individual counts being merely too little to influence the learning of the algorithm. In the case of feature `Operating.Syatem`, the `Windows` category was combined into category `Windows_All`, `iOs, Linux (Unknown) and Other` into category `Others`. The variable `Connection.State` categories were combined with categories ` INVALID, NEW and RELATED` forming the `Others` category. Complete cases of observations were selected, as missing data can affect model perfomance. The clean data comprises of `r dim(MLS_Data_2023)[1]` observation.
+
+```{r}
+# filter class == 0 or 1
+MLS_Data_2023 <- MLS_Data_2023 %>% 
+  filter(Class %in% c(0,1))
+# merge Operating.System
+MLS_Data_2023$`Operating System` <- fct_collapse(
+  MLS_Data_2023$`Operating System`,
+  Windows_All = c("Windows (Unknown)", "Windows 10+", "Windows 7"),
+  Others = c("Linux (unknown)", "iOS", "Other"),
+  Android = c("Android")
+)
+# merge connection state
+MLS_Data_2023$`Connection State` <- fct_collapse(
+  MLS_Data_2023$`Connection State`,
+  ESTABLISHED = c("ESTABLISHED"), 
+  Others = c("INVALID", "NEW", "RELATED") 
+)
+# select only complete cases
+MLData2023_cleaned <- MLS_Data_2023 %>% na.omit()
+```
+
+## Data Balancing
+
+```{r}
+class_dist <- prop.table(table(MLS_Data_2023$Class))*100
+```
+
+The target variable `Class` indicating whether an event trigger is malicious (`r table(MLS_Data_2023$Class)[[2]]` observations), `(coded 1)` accounts for `r round(class_dist, 2)[[1]]` % of the data, while or non-malicious (`r table(MLS_Data_2023$Class)[[1]]`) observations, `(coded 0)` accounts for `r round(class_dist, 2)[[2]]` %. Up-sampling is undertaken on the data by:
+
+1. The separation of observations by class variable labels into different sets
+2. Re sampling of the minority class is undertaken, by sampling with replacement a given number of observations per category so that minority class is at a reasonable frequency.
+3. Combining of the up-sampled data sets.
+
+```{r}
+# Separate samples of non-malicious and malicious events
+dat.class0 <- MLData2023_cleaned %>% filter(Class == 0) # non-malicious
+dat.class1 <- MLData2023_cleaned %>% filter(Class == 1) # malicious
+# Randomly select 19800 non-malicious and 200 malicious samples, 
+# then combine them to form the training samples
+set.seed(10591202)
+rows.train0 <- sample(1:nrow(dat.class0), size = 19800, replace = FALSE)
+rows.train1 <- sample(1:nrow(dat.class1), size = 200, replace = FALSE)
+
+# Your 20000 unbalanced training samples
+train.class0 <- dat.class0[rows.train0,] # Non-malicious samples
+train.class1 <- dat.class1[rows.train1,] # Malicious samples
+mydata.ub.train <- rbind(train.class0, train.class1)
+mydata.ub.train <- mydata.ub.train %>%
+  mutate(Class = factor(Class, labels = c("NonMal","Mal")))
+#
+# Your 39600 balanced training samples, i.e. 19800 non-malicious and 
+# malicious samples each.
+set.seed(123)
+train.class1_2 <- train.class1[sample(1:nrow(train.class1), size = 19800,
+                                      replace = TRUE),]
+mydata.b.train <- rbind(train.class0, train.class1_2)
+mydata.b.train <- mydata.b.train %>%
+  mutate(Class = factor(Class, labels = c("NonMal","Mal")))
+
+# Your testing samples
+test.class0 <- dat.class0[-rows.train0,]
+test.class1 <- dat.class1[-rows.train1,]
+mydata.test <- rbind(test.class0, test.class1)
+mydata.test <- mydata.test %>%
+  mutate(Class = factor(Class, labels = c("NonMal","Mal")))
+```
+
+In our analysis, the observations in the balanced train data are `r dim(mydata.b.train)[1]`, the unbalanced train `r dim(mydata.ub.train)[1]`, and the test data `r dim(mydata.test)[1]`. The balanced data has `r table(mydata.b.train$Class)[[1]]` non-malicious and `r table(mydata.b.train$Class)[[2]]` malicious observations while unbalanced has `r table(mydata.ub.train$Class)[[1]]` non-malicious and `r table(mydata.ub.train$Class)[[2]]` malicious observations.
+
+## Classifiers
+
+```{r}
+set.seed(10591202)
+models.list1 <- c("Logistic Ridge Regression",
+                  "Logistic LASSO Regression",
+                  "Logistic Elastic-Net Regression")
+models.list2 <- c("Classification Tree",
+                  "Bagging Tree",
+                  "Random Forest")
+myModels <- c(sample(models.list1, size = 1),
+              sample(models.list2, size = 1))
+#myModels %>% data.frame %>% knitr::kable(caption = 'Models')
+```
+
+Classification models `r paste0(myModels, collapse = ' and ')`` map observation features, by using distinctive characteristics, into either of the malicious and non malicious categories.
+
+### Random Forest
+
+The random forest algorithm creates a split at each node, based on subset of independent variables randomly selected at individual nodes, as stated by Liaw & Wiener (2002). James et al., (2014, p. 320) defines the steps to building a random forest as: 
+
++ The growing of specified number of tree bootstrap from the supplied data
++ With each bootstrap sample, a given number of predictors are sampled at each node to select the best split by variables.
++ Aggregation of final predictions from the number of trees initially supplied.
+
+### Logistic Elastic-Net Regression
+
+The model net extends the ridge and lasso regression by penalizing of `L1 and L2` penalties with an objective of keeping the prediction error rates at a minimum (James et al., 2014, p. 131).
+
+## Hyper-parameter tuning and Cross validation
+
+Hyper-parameters define the structure of the model, and their values cannot be directly derived from from the data used in training according to Yang & Shami, (2020), with the random forest hyper-tuned on the number of trees and the number of variables taken as sampling candidates at each of the node splits and the logistic elastic net hyper-tuned for values of lambda (regularization amount) and alpha (penalty) (Yang & Shami, 2020).
+
+The k-fold cross-validation randomly partitions the train data set into `k` groups of equal size, with `k-1` groups of the set used for training and remaining one used as test set, and the result being mean of the results (A. Ramezan et al., 2019).
+
+## Evaluation Metrics
+
+Metrics comparing model performance, are confusion matrix, the false positives (number of non-malicious events identified incorrectly as malicious), false negatives (number of malicious events identified incorrectly as non-malicious), the accuracy = $\frac{\text{TP}  + \text{TN}}{\text{TP}+\text{FP}+\text{TN}+\text{FN}}$, precision (Positive Predictive Value, PPV) = $\frac{\text{TP}}{\text{TP}+\text{FP}}$, recall (Sensitivity, hit rate, True Positive Rate, TPR) = $\frac{\text{TP}}{\text{TP}+\text{FN}}$ and the F1-score = $2 \times \frac{\text{Precison} \times \text{Recall}}{\text{Precision} + \text{Recall}}$. Precision is proportion of malicious correctly identified to sum of malicious correctly identifies and non-malicious incorrectly identifies while recall is maliciously correctly identified to sum of of malicious correctly identified and incorrectly classified malicious and f1 score the harmonic mean of the two.
+
+# Results
+
+```{r}
+library(caret)
+library(qwraps2)
+library(knitr)
+library(kableExtra)
+```
+
+```{r}
+dim_data_predictors_b = ncol(mydata.b.train)-1
+dim_data_predictors_ub = ncol(mydata.b.train)-1
+```
+
+```{r}
+# Random Forest -----------------------------------------------------------
+#
+tune_grid <- expand.grid(.mtry = sqrt(dim_data_predictors_b))
+ctrl <- trainControl(
+  method = "cv", number = 5, savePredictions = 'final') 
+# model baanced
+set.seed(10591202)
+rf_mydata_b_train <- train(
+  Class ~., data = mydata.b.train,
+  method="rf", model = FALSE,
+  metric="Accuracy",  returnData = FALSE,
+  trControl=ctrl,
+  ntree = 500,
+  tuneGrid =tune_grid )
+# Make predictions
+rf_predictions_mydata_b <- rf_mydata_b_train %>% predict(mydata.test)
+```
+
+
+```{r}
+# model unbalanced
+tune_grid <- expand.grid(.mtry = dim_data_predictors_ub)
+set.seed(10591202)
+rf_mydata_ub_train <- train(
+  Class ~., data = mydata.b.train,
+  method="rf", model = FALSE, returnData = FALSE,
+  metric="Accuracy",
+  trControl=ctrl,
+  ntree = 500,
+  tuneGrid =tune_grid )
+# Make predictions
+rf_predictions_mydata_ub <- rf_mydata_ub_train %>% predict(mydata.test)
+```
+
+
+```{r}
+#Logistic net
+# Build the model
+lambda.grid <- 10^seq(2,-2, length=100)
+alpha.grid <- seq(0, 1, length = 11)
+srchGrd = expand.grid(.alpha = alpha.grid, .lambda = lambda.grid)
+```
+
+
+```{r}
+# balanced data
+set.seed(10591202)
+elastic_mydata_b_train <- train(
+  Class ~., data = mydata.b.train, method = "glmnet",
+  tuneGrid = srchGrd, model = FALSE, returnData = FALSE,
+  trControl = trainControl("cv", number = 5),
+)
+# Make predictions
+elastic_predictions_mydata_b <- elastic_mydata_b_train %>% predict(mydata.test)
+```
+
+
+```{r}
+#Logistic net
+# unbalanced data
+set.seed(10591202)
+elastic_mydata_ub_train <- train(
+  Class ~., data = mydata.ub.train, method = "glmnet",
+  tuneGrid = srchGrd, model = FALSE, returnData = FALSE,
+  trControl = trainControl("cv", number = 5)
+)
+# Make predictions
+elastic_predictions_mydata_ub <- elastic_mydata_ub_train %>% predict(mydata.test)
+```
+
+Table \@ref(tab:hyperparam) provides the optimal parameters, Table \@ref(tab:confusionmatrix) the prediction metric summaries, for all models and data sets. Table \@ref(tab:perfomancemetrics) provides the prediction metrics on the test data for the metrics.
+
+```{r}
+# confusion matrix
+elastic_b = confusion_matrix(
+      x = elastic_predictions_mydata_b, y = mydata.test$Class, 
+      positive = 'Mal')
+elastic_ub = confusion_matrix(
+      x = elastic_predictions_mydata_ub, y = mydata.test$Class,
+      positive = 'Mal')
+rf_b = confusion_matrix(
+      x = rf_predictions_mydata_b, y = mydata.test$Class,
+      positive = 'Mal')
+rf_ub = confusion_matrix(
+      x = rf_predictions_mydata_ub, y = mydata.test$Class,
+      positive = 'Mal')
+#
+perfomance_results_all <- round(
+  data.frame(
+    'Elastic Net Balanced' = elastic_b$stats[,1], 
+    'Elastic Net Unbalanced' = elastic_ub$stats[,1],
+    'Random Forest Balanced' = rf_b$stats[,1], 
+    'Random Forest Unbalanced' = rf_ub$stats[,1], 
+    check.names = FALSE),
+  4)
+```
+
+```{r}
+elastic_b_mat = confusionMatrix(
+  table(elastic_predictions_mydata_b, mydata.test$Class), 
+  positive = 'Mal')
+elastic_ub_mat = confusionMatrix(
+  table(elastic_predictions_mydata_ub, mydata.test$Class),
+  positive = 'Mal')
+rf_b_mat = confusionMatrix(
+  table(rf_predictions_mydata_b, mydata.test$Class),
+  positive = 'Mal')
+rf_ub_mat = confusionMatrix(
+  table(rf_predictions_mydata_ub, mydata.test$Class),
+  positive = 'Mal')
+```
+
+```{r }
+perfomance_results_subset <- perfomance_results_all[
+    rownames(perfomance_results_all) %in% c(
+      'Accuracy', 'PPV','TPR', 'Sensitivity', 'F1', "FPR", "FNR"),]
+perfomance_results_subset <- round(perfomance_results_subset, 4)
+```
+
+### Accuracy
+
+```{r}
+#
+best_accur <- which.max(perfomance_results_subset['Accuracy',])
+#
+elnet_perf <- perfomance_results_subset[ ,
+   grepl('Elastic', names(perfomance_results_subset))] 
+#
+rf_perf <- perfomance_results_subset[
+  ,grepl('Random', names(perfomance_results_subset))]
+#
+balance_perf <- perfomance_results_subset[ 
+  ,grepl('Balanced', names(perfomance_results_subset))] 
+#
+unbalan_perf <- perfomance_results_subset[
+  ,grepl('Unbalance', names(perfomance_results_subset))]
+```
+
+
+```{r}
+## ACCURACY
+# Max accuracy Elastic
+max_elnet_accu_model <- which.max(elnet_perf['Accuracy',])
+# Max accuracy RF
+max_rf_accu_model <- which.max(rf_perf['Accuracy',])
+# Max accuracy Balanced
+max_b_accu_model <- which.max(balance_perf['Accuracy',])
+# Max accuracy Unbalance
+max_ub_accu_model <- which.max(unbalan_perf['Accuracy',])
+```
+
+DCE desires higher proportion of correct placing of malicious event records, with the best result being of model, data combination of `r names(max_elnet_accu_model)` having an accuracy of `r elnet_perf['Accuracy',max_elnet_accu_model]`, model, data combination of `r names(max_rf_accu_model)` having an accuracy of `r rf_perf['Accuracy',max_rf_accu_model]`. Similarly, in terms of data used, the Balanced, model combination of `r names(max_b_accu_model)` had the accuracy of `r balance_perf['Accuracy',max_b_accu_model]`, while Unbalance data, model combination of `r names(max_ub_accu_model)` had the an accuracy of `r unbalan_perf['Accuracy',max_ub_accu_model]`.
+
+```{r}
+###  precision (Positive Predictive Value, PPV)
+best_precision <- which.max(perfomance_results_subset['PPV',])
+#
+elnet_perf <- perfomance_results_subset[ 
+  ,grepl('Elastic', names(perfomance_results_subset))] 
+## PPV
+# Max PPV Elastic
+max_elnet_precision_model <- which.max(elnet_perf['PPV',])
+# Max PPV RF
+max_rf_precision_model <- which.max(rf_perf['PPV',])
+# Max PPV Balanced
+max_b_precision_model <- which.max(balance_perf['PPV',])
+# Max PPV Unbalance
+max_ub_precision_model <- which.max(unbalan_perf['PPV',])
+
+
+
+# Among the Logistic model, data combination of `r names(max_elnet_precision_model)` 
+# had the highest PPV of `r elnet_perf['PPV',max_elnet_precision_model]`. 
+# Among the Random Forest model, data combination of `r names(max_rf_precision_model)` 
+# had the highest PPV of `r rf_perf['PPV',max_rf_precision_model]`. 
+
+# Among the Balanced, model combination of `r names(max_b_precision_model)` 
+# had the highest PPV of `r balance_perf['PPV',max_b_precision_model]`. 
+# Among the Unbalance data, model combination of `r names(max_ub_precision_model)` 
+# had the highest PPV of `r unbalan_perf['PPV',max_ub_precision_model]`.
+
+### recall (Sensitivity, hit rate, True Positive Rate, TPR)
+best_recall <- which.max(perfomance_results_subset['Sensitivity',])
+#
+elnet_perf <- perfomance_results_subset[ 
+  ,grepl('Elastic', names(perfomance_results_subset))] 
+## Sensitivity
+# Max Sensitivity Elastic
+max_elnet_sens_model <- which.max(elnet_perf['Sensitivity',])
+# Max Sensitivity RF
+max_rf_sens_model <- which.max(rf_perf['Sensitivity',])
+# Max Sensitivity Balanced
+max_b_sens_model <- which.max(balance_perf['Sensitivity',])
+# Max Sensitivity Unbalance
+max_ub_sens_model <- which.max(unbalan_perf['Sensitivity',])
+
+# All event records need to be classified as much correctly as possible, 
+# Among the Logistic model, data combination of `r names(max_elnet_sens_model)` 
+# had the highest Sensitivity of `r elnet_perf['Sensitivity',max_elnet_sens_model]`. 
+# Among the Random Forest model, data combination of `r names(max_rf_sens_model)` 
+# had the highest Sensitivity of `r rf_perf['Sensitivity',max_rf_sens_model]`. 
+# Among the Balanced, model combination of `r names(max_b_sens_model)` had 
+# the highest Sensitivity of `r balance_perf['Sensitivity',max_b_sens_model]`. 
+# Among the Unbalance data, model combination of `r names(max_ub_sens_model)` 
+# had the highest Sensitivity of `r unbalan_perf['Sensitivity',max_ub_sens_model]`.
+
+### F1-score
+
+best_f1_score <- which.max(perfomance_results_subset['F1',])
+#
+elnet_perf <- perfomance_results_subset[ 
+  ,grepl('Elastic', names(perfomance_results_subset))] 
+## F1
+# Max F1 Elastic
+max_elnet_f1_score_model <- which.max(elnet_perf['F1',])
+# Max F1 RF
+max_rf_f1_score_model <- which.max(rf_perf['F1',])
+# Max F1 Balanced
+max_b_f1_score_model <- which.max(balance_perf['F1',])
+# Max F1 Unbalance
+max_ub_f1_score_model <- which.max(unbalan_perf['F1',])
+
+# Among the Logistic model, data combination of `r names(max_elnet_f1_score_model)` 
+# had the highest F1 of `r elnet_perf['F1',max_elnet_f1_score_model]`. 
+# Among the Random Forest model, data combination of `r names(max_rf_f1_score_model)` 
+# had the highest F1 of `r rf_perf['F1',max_rf_f1_score_model]`. Among the 
+# Balanced, model combination of `r names(max_b_f1_score_model)` had the 
+# highest F1 of `r balance_perf['F1',max_b_f1_score_model]`. Among the 
+# Unbalance data, model combination of `r names(max_ub_f1_score_model)` had 
+# the highest F1 of `r unbalan_perf['F1',max_ub_f1_score_model]`.
+```
+
+### False Positive Rate
+
+```{r}
+best_FPR_score <- which.min(perfomance_results_subset['FPR',])
+#
+elnet_perf <- perfomance_results_subset[
+  , grepl('Elastic', names(perfomance_results_subset))] 
+## FPR
+# Min FPR Elastic
+min_elnet_FPR_score_model <- which.max(elnet_perf['FPR',])
+# Min FPR RF
+min_rf_FPR_score_model <- which.min(rf_perf['FPR',])
+# Max FPR Balanced
+min_b_FPR_score_model <- which.min(balance_perf['FPR',])
+# Min FPR Unbalance
+min_ub_FPR_score_model <- which.min(unbalan_perf['FPR',])
+```
+
+DCE seeks a lower the chance of marking an event malicious when it is non-malicious, with the model, data combination of `r names(min_elnet_FPR_score_model)` having the low FPR of `r elnet_perf['FPR',min_elnet_FPR_score_model]` and `r names(min_rf_FPR_score_model)` with lowest FPR of `r rf_perf['FPR',min_rf_FPR_score_model]`. Based on the data, the data, model combination of `r names(min_b_FPR_score_model)` having the low FPR of `r balance_perf['FPR',min_b_FPR_score_model]` and `r names(min_ub_FPR_score_model)` having the low FPR of `r unbalan_perf['FPR',min_ub_FPR_score_model]`.
+
+### False Negative Rate
+
+```{r}
+#
+best_FNR_score <- which.min(perfomance_results_subset['FNR',])
+#
+elnet_perf <- perfomance_results_subset[ 
+  ,grepl('Elastic', names(perfomance_results_subset))] 
+## FNR
+# Max FNR Elastic
+max_elnet_FNR_score_model <- which.min(elnet_perf['FNR',])
+# Max FNR RF
+max_rf_FNR_score_model <- which.min(rf_perf['FNR',])
+# Max FNR Balanced
+max_b_FNR_score_model <- which.min(balance_perf['FNR',])
+# Max FNR Unbalance
+max_ub_FNR_score_model <- which.min(unbalan_perf['FNR',])
+```
+
+The lower the chance of a malicious event record being missed and classified as non-malicious, the better for DCE with the model, data combination of `r names(max_elnet_FNR_score_model)` having the highest FNR of `r elnet_perf['FNR',max_elnet_FNR_score_model]` while `r names(max_rf_FNR_score_model)` having the highest FNR of `r rf_perf['FNR',max_rf_FNR_score_model]`. Based on the data, model combination of `r names(max_b_FNR_score_model)` have the lowest FNR of `r balance_perf['FNR',max_b_FNR_score_model]`, while `r names(max_ub_FNR_score_model)` had the highest FNR of `r unbalan_perf['FNR',max_ub_FNR_score_model]`.
+
+# Discussion
+
+The best model, data combination in terms of accuracy, correctly classifying either of malicious or non-malicious events was of the `r names(best_accur)` at `r perfomance_results_subset['Accuracy', best_accur]`. Accuracy might be influenced by imbalance with the Unbalance data, model combination of `r names(max_ub_accu_model)` having slightly less but higher accuracy of `r unbalan_perf['Accuracy',max_ub_accu_model]`. The `Random Forest` model is at best suitable, in terms of accuracy and having associated lower chance of marking an event malicious when it is non-malicious (FPR), and marking a malicious event record being missed and classified as non-malicious (FNR). Based on variable importance, Table \@ref(tab:varImportance), `Assembled Payload Size` highly ranked on both data for Random forest, while for logistic elastic net, the `Server Response Packet Time` and `Connection State:Others` for balanced and unbalanced respectivey.
+
+The DCE seeks to better keep malicious as malicious as compared to even have a single malicious within the non-malicious as it would be costly to their systems and networks. The false positive rate needs to be at a minimum, as such with the best model, data combination on FPR was of the `r names(best_FPR_score)` at `r perfomance_results_subset['FPR', best_FPR_score]`.
+
+# Conclusions
+
+The earlier the detection of an event as malicious, the better for DCE as they would be able to put in place measure for risk analysis. However, it would be in the best interest for DCE to have fewer of non-malicious marked as malicious, but none of the malicious fall within the non-malicious, guided by the associated costs on the effects of attack on their systems and computer networks. 
+
+
+\newpage
+# References
+
+A. Ramezan, C., A. Warner, T., &amp; E. Maxwell, A. (2019). Evaluation of sampling and cross-validation tuning strategies for Regional-Scale Machine Learning Classification. Remote Sensing, 11(2), 185. https://doi.org/10.3390/rs11020185 
+
+Fawagreh, K., Gaber, M. M., & Elyan, E. (2014). Random forests: from early developments to recent advancements. Systems Science & Control Engineering: An Open Access Journal, 2(1), 602-609.
+
+F.Y, O., J.E.T, A., O, A., J. O, H., O, O., &amp; J, A. (2017). Supervised machine learning algorithms: Classification and comparison. International Journal of Computer Trends and Technology, 48(3), 128–138. https://doi.org/10.14445/22312803/ijctt-v48p126 
+
+Hofstede, R., Jonker, M., Sperotto, A., &amp; Pras, A. (2017). Flow-based web application brute-force attack and compromise detection. Journal of Network and Systems Management, 25(4), 735–758. https://doi.org/10.1007/s10922-017-9421-4 
+
+Lai, Y. P., & Hsia, P. L. (2007). Using the vulnerability information of computer systems to improve the network security. Computer Communications, 30(9), 2032-2047.
+
+Liaw, A., & Wiener, M. (2002). Classification and regression by randomForest. R news, 2(3), 18-22.
+
+Lipson, H. F. (2002). Tracking and tracing cyber-attacks: Technical challenges and global policy issues. 
+
+Yang, L., &amp; Shami, A. (2020). On hyperparameter optimization of Machine Learning Algorithms: Theory and practice. Neurocomputing, 415, 295–316. https://doi.org/10.1016/j.neucom.2020.07.061 
+
+\newpage
+# Appendix
+
+## Tables
+
+
+```{r hyperparam}
+#
+knitr::kable(
+  list(
+    rbind.data.frame(
+      data.frame(
+        rf_mydata_b_train$bestTune, num_tree = 500, 
+        row.names = 'Random Forest Balanced'),
+      data.frame(
+        rf_mydata_ub_train$bestTune, num_tree = 500, 
+        row.names = 'Random Forest Unbalanced')
+    ),
+    rbind.data.frame(
+      data.frame(elastic_mydata_b_train$bestTune, 
+                 row.names = 'Logistic Elastic Net Balanced'),
+      data.frame(elastic_mydata_ub_train$bestTune, 
+                 row.names = 'Logistic Elastic Net Balanced')
+    )
+  ), caption = 'Hyper-parameter tuning'
+) %>% kable_styling(latex_options =c("repeat_header","HOLD_position"))
+```
+
+```{r confusionmatrix}
+all_cm <- cbind(
+  as.data.frame.matrix(elastic_b_mat$table), 
+  as.data.frame.matrix(elastic_ub_mat$table),
+  as.data.frame.matrix(rf_b_mat$table), 
+  as.data.frame.matrix(rf_ub_mat$table)
+)
+#
+kable(x = all_cm, format = "latex", longtable =T, 
+      booktabs =T, caption ="Confusion Matrix") %>%
+  add_header_above(
+    c(" ","Logistic Elastic Net "=2,"Logistic Elastic Net"=2, 
+      "Random Forest"=2, "Random Forest"=2 )) %>%
+  add_header_above(
+    c("Predicted","Balanced"=2,"Unbalanced"=2, 
+      "Balanced"=2, "Unbalanced"=2 )) %>%
+  add_header_above(
+    c(" ","Actual Values"=8 )) %>%
+  kable_styling(latex_options =c("repeat_header","HOLD_position"))
+```
+
+```{r perfomancemetrics}
+knitr::kable(
+  perfomance_results_subset,
+  caption = 'Perfomance Evaluation', col.names = NULL) %>% 
+  add_header_above(
+    c("Metric","Balanced"=1,"Unbalanced"=1, 
+      "Balanced"=1, "Unbalanced"=1 )) %>%
+  add_header_above(
+    c(" ","Logistic Elastic Net "=2, "Random Forest"=2)) %>%
+  kable_styling(latex_options =c("repeat_header","HOLD_position"))
+```
+
+
+```{r varImportance}
+knitr::kable(
+  cbind.data.frame(
+    varImp(rf_mydata_b_train)$importance,
+    varImp(rf_mydata_ub_train)$importance,
+    #
+    varImp(elastic_mydata_b_train)$importance,
+    varImp(elastic_mydata_ub_train)$importance
+  ), 
+  caption = 'Variable Importance', digits = 4, 
+  col.names = NULL ) %>% 
+  add_header_above(
+    c(" ", "Balanced"=1,"Unbalanced"=1, 
+      "Balanced"=1, "Unbalanced"=1 )) %>%
+  add_header_above(
+    c(" ","Random Forest"=2,"Logistic Elastic Net "=2)) %>%
+  kable_styling(latex_options =c("HOLD_position")) 
+```
+
+
+```{r varDescription}
+knitr::kable(
+  
+data.frame(
+  variable = c("Assembled Payload Size (continuous)",
+               "DYNRiskA Score (continuous)", 
+               "Response Size (continuous)",
+               "Source Ping Time (ms) (continuous)",
+               "Operating System (Categorical)",
+               "Connection State (Categorical)", 
+               "Connection Rate (continuous)",
+               "Ingress Router (Binary)",
+               "Server Response Packet Time (ms) (continuous)"
+  ), 
+  decription =
+  c("The total size of the inbound suspicious payload.",
+    "An un-tested in-built risk score assigned by a new SIEM plug-in", 
+    "The total size of the reply data in the TCP conversation prior to the triggering packet", 
+    "The 'ping' time to the IP address which triggered the event record.", 
+    "A limited ‘guess’ as to the operating system that generated the inbound 
+  suspicious connection.", 
+    "An indication of the TCP connection state at the time the packet was triggered.",
+    "The number of connections per second by the inbound suspicious connection made 
+  prior to the event record creation", 
+    "DCE has two main network connections to the 'world'. 
+  This field indicates which connection the events arrived through", 
+    "An estimation of the time from when the payload was sent to when the reply"
+  )
+), caption = 'Variable Description'
+)
+```
+
+```{r}
+# balanced train data are
+write.csv(x = mydata.b.train, file = 'mydata_b_train.csv', row.names = F)
+# unbalanced train 
+write.csv(x = mydata.ub.train, file = 'mydata_ub_train.csv', row.names = F)
+# test data 
+write.csv(x = mydata.test, file = 'mydata_test.csv', row.names = F)
+```
+
+## Confusion Matrix Percentages
+
+```{r}
+library(gmodels)
+```
+
+### Logistice Elastic Net Balanced
+
+```{r}
+# confusion matrix
+gmodels::CrossTable(prop.chisq = F,
+  x = elastic_predictions_mydata_b, y = mydata.test$Class, 
+  format = 'SPSS', digits = 0,
+  positive = 'Mal', prop.r=FALSE, prop.c=TRUE, prop.t=FALSE)
+```
+
+### Logistice Elastic Net Unbalanced
+
+```{r}
+gmodels::CrossTable(prop.chisq = F,
+  x = elastic_predictions_mydata_ub, y = mydata.test$Class,
+  format = 'SPSS', digits = 0,
+  positive = 'Mal', prop.r=FALSE, prop.c=TRUE, prop.t=FALSE)
+```
+
+### Random Forest Balanced
+
+```{r}
+gmodels::CrossTable(prop.chisq = F,
+  x = rf_predictions_mydata_b, y = mydata.test$Class, 
+  format = 'SPSS', digits = 0,
+  positive = 'Mal', prop.r=FALSE, prop.c=TRUE, prop.t=FALSE)
+```
+
+### Random Forest Unbalanced
+
+```{r}
+gmodels::CrossTable(prop.chisq = F,
+  x = rf_predictions_mydata_ub, y = mydata.test$Class,
+  format = 'SPSS', digits = 0,
+  positive = 'Mal', prop.r=FALSE, prop.c=TRUE, prop.t=FALSE)
+
+```
+
