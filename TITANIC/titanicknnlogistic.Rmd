@@ -1,0 +1,139 @@
+---
+title: "Titanic to Classification"
+author: "Author"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    df_print: paged
+    toc: no
+    toc_depth: '6'
+  pdf_document:
+    toc: no
+    toc_depth: '6'
+  html_notebook:
+    fig_caption: no
+    toc: yes
+    toc_depth: 6
+    toc_float: yes
+  word_document:
+    toc: no
+    toc_depth: '6'
+urlcolor: blue
+subtitle: ""
+fontsize: 10pt
+---
+
+```{r, include=FALSE}
+knitr::opts_chunk$set(echo = T, warning=FALSE, message=FALSE)
+```
+
+# Overview
+
+On 15th April, 1912 the Titanic Sank on its return voyage to New York. There were an estimated 2224
+passengers and crew on board, with over 1500 fatalities from the sinking.\
+The Titanic dataset provides a sample of passengers, with some basic details: their names, ages, gender, class, and several others. We are predicting a binary response: whether the passenger survived or died.
+
+# Set-up
+
+## Load the titanic and titanic_hidden datasets
+
+```{r}
+titanic <- read.csv("titanic.csv", row.names=1)
+titanic_hidden <- read.csv("titanic.csv", row.names=1)[1:200,]
+```
+
+# Lab Steps
+
+## Clean the dataset for use in R
+
+```{r}
+library(caret)
+library(tidyverse)
+library(rsample)
+```
+
+
+```{r}
+titanic <- titanic %>% select(-Name)
+titanic_hidden <- titanic_hidden %>% select(-Name)
+titanic$Survived <- factor(titanic$Survived, labels = c("Deceased", "Survived"))
+titanic_hidden$Survived <- factor(titanic_hidden$Survived, 
+                                  labels = c("Deceased", "Survived"))
+```
+
+## Display the summary from a logistic regression: response Survived and include every other variable as predictors
+
+```{r}
+# define training control
+train_control <- trainControl(method = "cv", number = 10)
+# train the model on training set
+logistic_reg_model <- train(Survived ~ .,
+                   data = titanic,
+                   trControl = train_control,
+                   method = "glm",
+                   family=binomial())
+```
+
+
+```{r}
+logistic_reg_model_summary <- summary(logistic_reg_model)
+logistic_reg_model_summary
+```
+
+## Interpret the meaning of the Male gender indicator variable coefficient
+
+```{r}
+# Coefficients
+logistic_reg_model_summary$coefficients[3,,drop =F]
+```
+
+The `Sexmale` coefficient is statistically significant (associated with a p-value < 0.05), for which the logistic regression model suggests that passenger being of male sex does in fact influence the survival chances, and as it is a negative number, implies that passenger being of male sex decreases the survival chance.
+
+```{r}
+coeff_logistic_reg_model <- coef(logistic_reg_model$finalModel)
+```
+
+When interpreting the differences across genders, it is much easier to infer from $\text{exp}(\beta_{\text{Sexmale}})$ = `r exp(coeff_logistic_reg_model['Sexmale'])` that represents the odds ratio associating passenger gender to rate survival.
+
+A passenger being of the male gender has an associated `r 100*(1-exp(coeff_logistic_reg_model['Sexmale']))` % (1 -$\text{exp}(\beta_{\text{Sexmale}})$ = `r 1-exp(coeff_logistic_reg_model['Sexmale'])` ) less chance of survival compared to female gender passengers.
+
+## Use your model to predict the status of the passengers in the titanic_hidden dataset
+
+```{r}
+log_prediction <- predict(logistic_reg_model, titanic_hidden)
+confusionMatrix(log_prediction, titanic_hidden$Survived)
+```
+
+## Now use caret to set up a KNN with response Survived and all other variables, then predict the status of passengers in the titanic_hidden dataset
+
+```{r}
+set.seed(400)
+knn_reg_model <- train(Survived ~ ., 
+                data = titanic, 
+                method = "knn", 
+                trControl = train_control, 
+                preProcess = c("center","scale"), tuneLength = 20)
+```
+
+
+```{r}
+#Output of kNN fit
+knn_prediction <- predict(knn_reg_model, titanic_hidden)
+confusionMatrix(knn_prediction, titanic_hidden$Survived)
+```
+
+## Which model performs best for "Accuracy"?
+
+```{r}
+accuracy_data_frame = data.frame(
+  Model = c('Logistic Regression', 'KNN'),
+  Accuracy = c(
+    confusionMatrix(log_prediction, titanic_hidden$Survived)$overall['Accuracy'],
+    confusionMatrix(knn_prediction, titanic_hidden$Survived)$overall['Accuracy']
+  )
+)
+accuracy_data_frame[order(-accuracy_data_frame$Accuracy),]
+accuracy_data_frame
+```
+
+`r paste0('Model that performs best for Accuracy: ', accuracy_data_frame[1,1])`
