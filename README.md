@@ -8,7 +8,10 @@ A suggested approach is incorporate a real-time threat detection system based on
 
 The Titanic data set provides a sample of passengers, with some basic details: their names, ages, gender, class, and several others. We are predicting a binary response: whether the passenger survived or died.
 
+# [Spam Base Classification](Spam%20Base%20Classification)
 
-# [Spam Base Classification](./Spam Base Classification)
+# SPAM BASE CLASSIFICATION'
 
-- Classification of The Spambase Data Set was obtained from the UCI Machine Learning Repository.
+## Data
+
+The [Spambase Data Set](https://archive.ics.uci.edu/ml/datasets/Spambase) was obtained from the [UCI Machine Learning Repository](https://archive.ics.uci.edu/ml/datasets/). 
