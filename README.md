@@ -10,8 +10,6 @@ The Titanic data set provides a sample of passengers, with some basic details: t
 
 # [Spam Base Classification](Spam%20Base%20Classification)
 
-# SPAM BASE CLASSIFICATION'
-
 ## Data
 
 The [Spambase Data Set](https://archive.ics.uci.edu/ml/datasets/Spambase) was obtained from the [UCI Machine Learning Repository](https://archive.ics.uci.edu/ml/datasets/). 
