@@ -1,0 +1,275 @@
+---
+title: "Research Project Questions"
+subtitle: "DATA5207: Data Analysis in the social sciences"
+author: 'NAME'
+date: "`r format(Sys.time(), '%B %d, %Y')`"
+output:
+  word_document:
+    toc: yes
+    toc_depth: '6'
+  html_notebook: default
+  pdf_document:
+    toc: yes
+    toc_depth: '6'
+    number_sections: true
+fontsize: 12pt
+spacing: single
+urlcolor: blue
+---
+\newpage
+
+```{r, include=FALSE}
+knitr::opts_chunk$set(echo = F,warning=FALSE,message=FALSE,attr.source='.numberLines',attr.output='.numberLines', fig.align='center', dpi=350, fig.width=12, fig.height=12)
+options(scipen = 999)
+```
+
+\newpage
+
+# Introduction
+
+The monitoring of health statistics forms creates a strong foundation for the tracking of the general population health (Bchir et al., 2006) and guides policy formulation around matters health (Krieger et al., 1997). Studies have been undertaken to map out the relation between health metrics and socio-economic aspects, including (Braveman et al., 2010) checking on education, income levels and race and found that the least educated and lower income groupings were often associated with lower health status.
+
+The main objective is pointing out the predictors for better health outcomes at the county level in the United States. The relationship existing between various variables is assessed and how they generally influence the number of deaths among United States of America county residents under age 75 per 100,000 population (age-adjusted). Regression analysis with the dependent variable, premature age-adjusted mortality variable, an important health indicator (Mansfield et al., 1999) and predictor variables are selected based on previous research (Cheng & Kindig, 2012) is undertaken. 
+
+The predictors based on strong association to premature age-adjusted mortality variable by previous studies include variables with information on income and income inequality (Adler & Newman, 2002), population, demography aspects (Cooper et al., 2001) including race, health care costs and associated level of access (Han et al., 2024), and numbers on primary care providers, preventable hospitalizations (Bhanot et al., 2024), high school graduation rates and college education levels (Roy et al., 2020), the percentage of single-parent households, and children living in poverty guidelines, and finally percentages of adult obesity and smoking (Rosella & Buajitti, 2024).
+
+\newpage
+
+# Methods
+
+The data on different health outcomes within United States counties, is obtained from the Robert Wood Johnson Foundation and the University of Wisconsin Population Health Institute. A multiple regression model is used to assess the linear relation, based on its ease of interpretation (Anandhi & Nathiya, 2023), with no pre-processing of data undertaken before fitting.
+
+## Data Information
+
+```{r}
+library(tidyverse)
+library(readxl)
+library(readxl)
+library(janitor)
+library(reshape) # cor data reshape
+library(broom)
+library(psych)
+```
+
+```{r}
+additional_measure <- read_excel(
+  "2018 County Health Rankings Data - v2.xls", 
+  sheet = "Additional Measure Data", skip = 1) |>
+  clean_names() |>
+  select(
+    fips, state, county, 
+    age_adjusted_mortality, 
+      # additional
+      # income (median household income, income inequality)
+      household_income,
+      # population
+      population,
+      # demography
+      percent_african_american, 
+      percent_american_indian_alaskan_native, 
+      percent_asian, 
+      percent_native_hawaiian_other_pacific_islander, 
+      percent_hispanic, 
+      percent_non_hispanic_white,
+      # health care access and quality (
+      # percentage of adults aged less than 65 without insurance, 
+      percent_uninsured_51,
+      # healthcare costs
+      costs,
+      # number of primary care providers per 100,000 population,
+      other_pcp_rate
+  )
+ranked_measure <- read_excel(
+  "2018 County Health Rankings Data - v2.xls", 
+  sheet = "Ranked Measure Data", skip = 1)  |>
+  clean_names() |> 
+  select(
+    fips, state, 
+    
+      # ranked measure
+      # income (median household income, income inequality)
+      income_ratio,
+      # preventable hospitalizations per 1,000 population), 
+      preventable_hosp_rate,
+      # socioenvironmental factors (
+      # average high school freshman graduation rate per 1,000 population, 
+      graduation_rate,
+      # percentage of adults aged 25 or older with a 4-year college degree, 
+      percent_some_college,
+      # percentage of single-parent households, 
+      percent_single_parent_households,
+      # percentage of children living below federal poverty guidelines), and 
+      percent_children_in_poverty,
+      # behavior factors (percentages of adult obesity and smoking).
+      percent_obese,
+      percent_smokers
+  )
+# ranked_measure
+```
+
+
+```{r}
+all_data = merge(
+  additional_measure,
+  ranked_measure
+)
+# exclude county, state anf fips variables
+analysis_data = all_data[, c(-1,-2,-3)]
+```
+
+The data contains `r dim(analysis_data)[1]` observations and `r dim(analysis_data)[2]` features.
+
+### Measures
+
+Dependent Variables: `Premature age-adjusted mortality`
+
+Independent Variables:
+
+1. Median household income: Small Area Income and Poverty Estimates
+2. Income inequality: Ratio of household income at the 80th percentile to income at the 20th percentile
+3. Census Population Estimates	2016
+  a. Population Size
+  b. Population percentages by Race
+      + % Non-Hispanic African American: 
+      + % American Indian and Alaskan Native: 
+      + % Asian: 
+      + % Native Hawaiian/Other Pacific Islander: 
+      + % Hispanic: 
+      + % Non-Hispanic white: 
+4. Uninsured adults:
+5. Health care costs
+6. Other primary care providers
+7. Preventable hospital stays: Number of hospital stays for ambulatory-care sensitive conditions per 1,000 Medicare enrollees
+8. High school graduation: Percentage of ninth-grade cohort that graduates in four years
+9. Some college: Percentage of adults ages 25-44 with some post-secondary education
+10. Children in single-parent households: Percentage of children that live in a household headed by single parent
+11. Children in poverty: Percentage of children under age 18 in poverty
+12. Adult smoking: Percentage of adults who are current smokers
+13. Adult obesity: Percentage of adults that report a BMI of 30 or more
+
+## Descriptive Statistics
+
+Summary statistics of the data is as below:
+
+```{r}
+psych::describe(analysis_data) |> select(min, mean, median, max, sd) |>
+  # pander::pander()
+  knitr::kable()
+```
+
+### Exploratory Analysis
+
+Majority of the variables depicting skewness and presence of outlier points in the data.
+
+```{r, fig.width=20, fig.height=20, dpi=600}
+analysis_data |> 
+  mutate(
+    index = n()
+  ) |>
+  pivot_longer(
+    cols = !index,
+    names_to = 'variables',
+    values_to = 'values'
+  ) |>
+  ggplot(aes(x = variables, y = values)) +
+  geom_boxplot() +
+  facet_wrap(
+    .~variables, scales = 'free'
+  ) +
+  theme(
+    axis.title = element_blank(),
+    axis.text.x = element_blank()
+  )
+```
+
+### Correlation Analysis
+
+```{r}
+correlation_mat <- round(cor(analysis_data, use = 'complete.obs'),1) #
+correlation_mat_melt <- melt(correlation_mat)
+correlation_mat_melt |> 
+  mutate(
+    X1 = str_replace(X1, 'percent_', ''), 
+    X2 = str_replace(X2, 'percent_', '')) |> 
+  ggplot(aes(x = X1, y = X2, fill = value)) +
+  geom_tile() +
+  geom_text(aes(x = X1, y = X2, label = value)) +
+  theme(
+    legend.position = 'none',
+    axis.title = element_blank(),
+    axis.text.x = element_text(angle = 45, hjust = 1)
+  )
+```
+
+\newpage
+## Model Fitting
+
+```{r}
+model_1 = lm(
+  age_adjusted_mortality ~ ., data = analysis_data
+)
+model_1_summary = summary(model_1)
+```
+
+```{r, tab.cap='Model Coefficients', eval=TRUE}
+tidy(model_1_summary) |> select(c(1,2,5)) |> knitr::kable()
+```
+
+
+```{r, tab.cap='Model Summary'}
+broom::glance(model_1) |> select(c(1,2,3,5,12)) |> clean_names() |> knitr::kable()
+```
+
+## Model Diagnostics
+
+```{r}
+par(mfrow = c(2, 2))
+plot(model_1)
+par(mfrow = c(1,1))
+```
+
+There is no clear pattern in the `Residuals vs Fitted` plot, leading to assumption that the relation between predictor and dependent variable is linear. The `Normal Q-Q` depicts normal residual closely following the straight 4-degree dashed line. There is homogeneity of variance of the residuals based on the spread of data points in `Scale-Location` plot. There are 3 influential observations, 87, 547 and 2291 on `Residuals vs Leverage`, which may have insignificant influence on the model (Anandhi & Nathiya, 2023).
+
+# Results
+
+The observations with missing data points were automatically excluded from the model. The correlation plot depicts strong positive linear relationship between `Premature age-adjusted mortality` and `Percentage of children under age 18 in poverty` at 0.8, and negative with `Median household income` at -0.7.
+
+The r-squared of `r model_1_summary$r.squared` implies that the model explains `r round(100*model_1_summary$r.squared,1)` % variance in `Premature age-adjusted mortality` at the county level. All the independent variables, but `Percent Native Hawaiian other Pacific Islander` and `graduation_rate` are statistically significant at significance level $\alpha = 0.05$, implying that the significant variables are associated to and can be used as determinants of premature age mortality. The results are consistent with findings of previous studies on race, education and female led households (Mansfield et al., 1999), income and inequlity and race (Cooper et al., 2001) and percentages of adult obesity and smoking (Rosella & Buajitti, 2024) as predictors of `Premature age-adjusted mortality`. An approach of multilevel analysis (Shavers,2007) can be undertaken to further understand the influence of insignificant variables.
+
+The analysis undertaken is limited to only the data provided and extensive analysis can be undertaken to include other variables, datasets or models of interest that may capture the influence of socio-economic attributes on premature age mortality.
+
+
+\newpage
+# References
+Adler, N. E., & Newman, K. (2002). Socioeconomic disparities in health: Pathways and policies. Health Affairs, 21(2), 60–76. https://doi.org/10.1377/hlthaff.21.2.60 
+
+Anandhi, P., & Nathiya, E. (2023). Application of linear regression with their advantages, disadvantages, assumption and limitations.
+
+Bchir, A., Bhutta, Z., Binka, F., Black, R., Bradshaw, D., Garnett, G., Hayashi, K., Jha, P., Peto, R., Sawyer, C., Schwartländer, B., Walker, N., Wolfson, M., Yach, D., & Zaba, B. (2006). Better health statistics are possible. The Lancet, 367(9506), 190–193. https://doi.org/10.1016/s0140-6736(06)68011-2 
+
+Bhanot, K., Erickson, J. S., & Bennett, K. P. (2024). Mortalityminder: Visualization and AI interpretations of social determinants of premature mortality in the United States. Information, 15(5), 254. https://doi.org/10.3390/info15050254 
+
+Braveman, P. A., Cubbin, C., Egerter, S., Williams, D. R., & Pamuk, E. (2010). Socioeconomic disparities in health in the United States: What the patterns tell us. American Journal of Public Health, 100(S1). https://doi.org/10.2105/ajph.2009.166082 
+
+Cheng, E., & Kindig, D. (2012). Disparities in premature mortality between high- and low-income US counties. Preventing Chronic Disease. https://doi.org/10.5888/pcd9.110120 
+
+Cooper, R. S., Kennelly, J. F., Durazo-Arvizu, R., Oh, H.-J., Kaplan, G., & Lynch, J. (2001). Relationship between premature mortality and socioeconomic factors in black and white populations of US metropolitan areas. Public Health Reports, 116(5), 464–473. https://doi.org/10.1016/s0033-3549(04)50074-2 
+
+Han, X., Hu, X., Zheng, Z., Shi, K. S., & Yabroff, K. R. (2024). Associations of medical debt with health status, premature death, and mortality in the US. JAMA Network Open, 7(3). https://doi.org/10.1001/jamanetworkopen.2023.54766 
+
+Jobson, J. D., & Jobson, J. D. (1991). Multiple linear regression. Applied multivariate data analysis: regression and experimental design, 219-398.
+
+Krieger, N., Chen, J. T., & Ebel, G. (1997). Can we monitor socioeconomic inequalities in health? A survey of US health departments' data collection and reporting practices. Public health reports, 112(6), 481.
+
+Mansfield, C. J., Wilson, J. L., Kobrinski, E. J., & Mitchell, J. (1999b). Premature mortality in the United States: The roles of geographic area, socioeconomic status, household type, and availability of medical care. American Journal of Public Health, 89(6), 893–898. https://doi.org/10.2105/ajph.89.6.893 
+
+Premature age-adjusted mortality*. County Health Rankings & Roadmaps. (n.d.-a). https://www.countyhealthrankings.org/health-data/health-outcomes/length-of-life/premature-age-adjusted-mortality?year=2024 
+
+Rosella, L. C., & Buajitti, E. (2024). Risk of premature mortality due to smoking, alcohol use, obesity and physical activity varies by income: A population-based Cohort Study. SSM - Population Health, 25, 101638. https://doi.org/10.1016/j.ssmph.2024.101638 
+
+Roy, B., Kiefe, C. I., Jacobs, D. R., Goff, D. C., Lloyd-Jones, D., Shikany, J. M., Reis, J. P., Gordon-Larsen, P., & Lewis, C. E. (2020). Education, race/ethnicity, and causes of premature mortality among middle-aged adults in 4 US urban communities: Results from Cardia, 1985–2017. American Journal of Public Health, 110(4), 530–536. https://doi.org/10.2105/ajph.2019.305506 
+
+Shavers, V. L. (2007). Measurement of socioeconomic status in health disparities research. Journal of the national medical association, 99(9), 1013.
+
+Sorlie, P. D., Backlund, E., & Keller, J. B. (1995). US mortality by economic, demographic, and social characteristics: The National Longitudinal Mortality Study. American Journal of Public Health, 85(7), 949–956. https://doi.org/10.2105/ajph.85.7.949 
+

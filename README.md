@@ -13,3 +13,13 @@ The Titanic data set provides a sample of passengers, with some basic details: t
 ## Data
 
 The [Spambase Data Set](https://archive.ics.uci.edu/ml/datasets/Spambase) was obtained from the [UCI Machine Learning Repository](https://archive.ics.uci.edu/ml/datasets/). 
+
+# [predictors for better health outcomes at the county level in the United States](SocialScienccesMortality)
+
+Research Plan: What are the predictors for better health outcomes at the county level in the United States?
+
+I use a combination of the data to establish a theory of ecological health outcomes and an explanatory model. The 
+dependent variable will be the Premature age-adjusted mortality variable in sheet 6 of data. 
+
+Data provided: Data file of different health outcomes at the level of US counties, from the Robert Wood
+Johnson Foundation and the University of Wisconsin Population Health Institute.
